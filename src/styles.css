@@ -503,6 +503,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .auth-preview-note svg { color: var(--accent-blue); }
 .login-input-wrap:focus-within { border-color: var(--accent-blue); }
 .guest-button:hover { border-color: var(--accent-blue); background: #eaf4ff; }
+.live-timing { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 15px 20px; align-items: center; margin: 0 0 14px; padding: 18px 19px 15px; overflow: hidden; border: 1px solid #c9e2f4; border-radius: 12px; background: radial-gradient(ellipse at 100% 0%, rgba(34,211,238,.18), transparent 42%), linear-gradient(120deg, #f4f7ff, #effbfc); box-shadow: 0 7px 19px rgba(37,99,235,.06), inset 0 1px #fff; }
+.live-timing-active { border-color: #8eb7ef; box-shadow: 0 8px 22px rgba(37,99,235,.1), inset 0 1px #fff; }
+.live-timing-main { min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+.live-indicator { width: 10px; height: 10px; flex: 0 0 auto; margin-top: 5px; border-radius: 50%; background: #91a8c2; }
+.live-timing-active .live-indicator { background: var(--accent-blue); box-shadow: 0 0 0 4px rgba(37,99,235,.13); animation: timing-pulse 2s ease-in-out infinite; }
+.live-timing-copy { min-width: 0; }
+.live-timing-label { color: #155eaa; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+.live-timing-copy h2 { overflow: hidden; margin: 5px 0 3px; color: #243b56; font-family: var(--display-font); font-size: 18px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.live-timing-copy p { margin: 0; color: #60758b; font-size: 13px; }
+.live-timing-side { display: grid; justify-items: end; gap: 5px; }
+.live-clock { color: #243b56; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.live-countdown { color: #155eaa; font-size: 10px; font-weight: 800; letter-spacing: .7px; font-variant-numeric: tabular-nums; }
+.reminder-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; margin-top: 2px; padding: 0 10px; border: 1px solid #b8d1ed; border-radius: 7px; background: rgba(255,255,255,.78); color: #174ea6; font-size: 12px; font-weight: 700; cursor: pointer; }
+.reminder-toggle:hover:not(:disabled) { border-color: var(--accent-blue); background: #fff; }
+.reminder-toggle:disabled { cursor: not-allowed; opacity: .65; }
+.live-progress { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 99px; background: #dce9f5; }
+.live-progress span { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 1s linear; }
+.live-timing-footnote, .reminder-message { grid-column: 1 / -1; margin: -6px 0 0; color: #58738c; font-size: 12px; line-height: 1.5; }
+.reminder-message { margin: -6px 0 0; color: #155eaa; }
+.schedule-item-current .item-card { border-color: #8eb7ef; box-shadow: 0 0 0 2px rgba(37,99,235,.1), 0 6px 16px rgba(37,99,235,.08), inset 0 1px #fff; }
+.schedule-item-current .timeline-line i { border-color: var(--accent-blue); background: var(--accent-blue); }
+@keyframes timing-pulse { 50% { box-shadow: 0 0 0 7px rgba(37,99,235,0); } }
+@media (max-width: 650px) {
+  .live-timing { gap: 12px; padding: 15px 13px 13px; }
+  .live-timing-copy h2 { max-width: 205px; font-size: 16px; }
+  .live-timing-copy p { font-size: 12px; }
+  .live-clock { font-size: 14px; }
+  .live-countdown { font-size: 9px; }
+  .reminder-toggle { min-height: 32px; padding: 0 8px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-timing-active .live-indicator { animation: none; }
+}
 .install-app-button { width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 13px; padding: 10px 12px; border: 1px solid #bfd7f8; border-radius: 8px; background: linear-gradient(120deg, #eff5ff, #ebfbfd); color: #174ea6; font-size: 13px; font-weight: 700; cursor: pointer; }
 .install-app-button:hover { border-color: var(--accent-blue); background: linear-gradient(120deg, #e5efff, #e2fafd); }
 .login-install-button { max-width: 405px; margin: 17px auto 0; }

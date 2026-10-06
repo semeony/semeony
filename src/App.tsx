@@ -4,6 +4,8 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUpRight,
+  Bell,
+  BellOff,
   CalendarDays,
   Check,
   ChevronDown,
@@ -137,6 +139,16 @@ function formatTime(totalMinutes: number): string {
   return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`
 }
 
+function formatCountdown(totalSeconds: number): string {
+  const seconds = Math.max(0, totalSeconds)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = seconds % 60
+  return hours
+    ? `${hours}h ${String(minutes).padStart(2, '0')}m`
+    : `${String(minutes).padStart(2, '0')}m ${String(remainingSeconds).padStart(2, '0')}s`
+}
+
 function dayLabel(date: string): string {
   return new Date(`${date}T12:00:00`).toLocaleDateString('en', {
     weekday: 'long',
@@ -265,6 +277,56 @@ function App() {
   const [installMessage, setInstallMessage] = useState('')
   const [appInstalled, setAppInstalled] = useState(false)
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
+  const [remindersEnabled, setRemindersEnabled] = useState(false)
+  const [reminderMessage, setReminderMessage] = useState('')
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    'Notification' in window ? Notification.permission : 'unsupported',
+  )
+  const notifiedBlocks = useRef(new Set<string>())
+
+  useEffect(() => {
+    const updateTime = () => setCurrentTime(new Date())
+    const interval = window.setInterval(updateTime, 1000)
+    window.addEventListener('focus', updateTime)
+    document.addEventListener('visibilitychange', updateTime)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', updateTime)
+      document.removeEventListener('visibilitychange', updateTime)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!plan || !remindersEnabled || notificationPermission !== 'granted') return
+    let lastCheckedAt = Date.now()
+    const interval = window.setInterval(() => {
+      const checkedAt = Date.now()
+      const previousCheck = lastCheckedAt
+      lastCheckedAt = checkedAt
+      for (const block of plan.blocks) {
+        if (block.done) continue
+        const key = `${plan.date}:${block.id}`
+        const startAt = new Date(`${plan.date}T${String(Math.floor(block.start / 60)).padStart(2, '0')}:${String(block.start % 60).padStart(2, '0')}:00`).getTime()
+        if (startAt <= previousCheck || startAt > checkedAt || notifiedBlocks.current.has(key)) continue
+        notifiedBlocks.current.add(key)
+        const options: NotificationOptions = {
+            body: `This is scheduled until ${formatTime(block.end)}.`,
+            icon: `${import.meta.env.BASE_URL}icons/daywell-sunrise-192.png`,
+            tag: key,
+          }
+        const notification = 'serviceWorker' in navigator
+          ? navigator.serviceWorker.ready.then((registration) => registration.showNotification(`Starting now: ${block.title}`, options))
+          : Promise.resolve().then(() => { new Notification(`Starting now: ${block.title}`, options) })
+        void notification
+          .catch((error: unknown) => {
+            console.error('Daywell could not show a schedule reminder.', error)
+            setReminderMessage('A schedule reminder could not be shown. Check your browser notification settings.')
+          })
+      }
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [notificationPermission, plan, remindersEnabled])
 
   useEffect(() => {
     const handleInstallPrompt = (event: Event) => {
@@ -512,6 +574,22 @@ function App() {
   const completedCount = plan?.blocks.filter((block) => block.done && block.kind === 'task').length ?? 0
   const taskCount = plan?.blocks.filter((block) => block.kind === 'task').length ?? 0
   const completion = taskCount ? Math.round((completedCount / taskCount) * 100) : 0
+  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes()
+  const currentSeconds = currentMinutes * 60 + currentTime.getSeconds()
+  const currentBlock = plan?.date === today
+    ? plan.blocks.find((block) => !block.done && currentMinutes >= block.start && currentMinutes < block.end) ?? null
+    : null
+  const nextBlock = plan?.date === today
+    ? plan.blocks.find((block) => !block.done && block.start > currentMinutes) ?? null
+    : null
+  const countdownSeconds = currentBlock
+    ? currentBlock.end * 60 - currentSeconds
+    : nextBlock
+      ? nextBlock.start * 60 - currentSeconds
+      : null
+  const blockProgress = currentBlock
+    ? Math.min(100, Math.max(0, ((currentMinutes + currentTime.getSeconds() / 60 - currentBlock.start) / (currentBlock.end - currentBlock.start)) * 100))
+    : 0
   const groupedBlocks = useMemo(() => {
     if (!plan) return []
     const groups = new Map<string, ScheduleBlock[]>()
@@ -521,6 +599,38 @@ function App() {
     }
     return [...groups.entries()]
   }, [plan])
+
+  async function toggleScheduleReminders() {
+    setReminderMessage('')
+    if (remindersEnabled) {
+      setRemindersEnabled(false)
+      setReminderMessage('Schedule reminders are paused.')
+      return
+    }
+    if (!('Notification' in window)) {
+      setNotificationPermission('unsupported')
+      setReminderMessage('This browser does not support notifications. The live schedule timer will still work here.')
+      return
+    }
+
+    try {
+      const permission = Notification.permission === 'default'
+        ? await Notification.requestPermission()
+        : Notification.permission
+      setNotificationPermission(permission)
+      if (permission === 'granted') {
+        setRemindersEnabled(true)
+        setReminderMessage('Reminders are on while Daywell is open. Keep this page open for schedule alerts.')
+      } else if (permission === 'denied') {
+        setReminderMessage('Notifications are blocked for Daywell. Allow them in your browser or device settings to enable reminders.')
+      } else {
+        setReminderMessage('Notifications were not enabled. You can allow them in your browser settings.')
+      }
+    } catch (error) {
+      console.error('Daywell could not request notification permission.', error)
+      setReminderMessage('Daywell could not request notification permission. Check your browser settings and try again.')
+    }
+  }
 
   function handleCreatePlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -854,6 +964,60 @@ function App() {
               <div><span className="intention-caption">A NOTE TO YOURSELF</span><p>{plan.intention || 'Take the day one step at a time.'}</p></div>
               <span className="intention-sparkle"><Clock3 size={17} /></span>
             </div>
+            <section className={`live-timing ${currentBlock ? 'live-timing-active' : ''}`} aria-label="Live schedule timing">
+              <div className="live-timing-main">
+                <span className="live-indicator" aria-hidden="true" />
+                <div className="live-timing-copy">
+                  <span className="live-timing-label">{currentBlock ? 'HAPPENING NOW' : nextBlock ? 'UP NEXT' : 'YOUR LOCAL TIME'}</span>
+                  <h2>{currentBlock?.title ?? nextBlock?.title ?? 'Your scheduled day is complete.'}</h2>
+                  <p>
+                    {currentBlock
+                      ? `Scheduled until ${formatTime(currentBlock.end)}`
+                      : nextBlock
+                        ? `Starts at ${formatTime(nextBlock.start)}`
+                        : 'Take a moment to pause or plan what is next.'}
+                  </p>
+                </div>
+              </div>
+              <div className="live-timing-side">
+                <time className="live-clock" dateTime={currentTime.toISOString()}>
+                  {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </time>
+                {countdownSeconds !== null && (
+                  <span className="live-countdown">
+                    {currentBlock ? 'ENDS IN' : 'STARTS IN'} {formatCountdown(countdownSeconds)}
+                  </span>
+                )}
+                <button
+                  className="reminder-toggle"
+                  type="button"
+                  aria-pressed={remindersEnabled}
+                  disabled={notificationPermission === 'unsupported'}
+                  onClick={() => void toggleScheduleReminders()}
+                >
+                  {remindersEnabled ? <BellOff size={16} /> : <Bell size={16} />}
+                  {remindersEnabled ? 'Pause reminders' : 'Enable reminders'}
+                </button>
+              </div>
+              {currentBlock && (
+                <div
+                  className="live-progress"
+                  role="progressbar"
+                  aria-label={`Time elapsed for ${currentBlock.title}`}
+                  aria-valuenow={Math.round(blockProgress)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <span style={{ width: `${blockProgress}%` }} />
+                </div>
+              )}
+              <p className="live-timing-footnote">
+                {notificationPermission === 'unsupported'
+                  ? 'Live timing uses this device’s clock. This browser does not support notifications.'
+                  : 'Live timing uses this device’s clock. Reminders work while Daywell is open; closed-app push alerts are not set up yet.'}
+              </p>
+              {reminderMessage && <p className="reminder-message" role="status">{reminderMessage}</p>}
+            </section>
             <div className="overview-row">
               <div className="progress-card">
                 <div className="progress-top"><span>PRIORITIES COMPLETED</span><strong>{completedCount}<small> of {taskCount}</small></strong></div>
@@ -869,7 +1033,7 @@ function App() {
                     <div className="period-heading"><h2 id={`period-${period}`}>{period}</h2><span>{blocks.length} {blocks.length === 1 ? 'moment' : 'moments'}</span></div>
                     <div className="period-items">
                       {blocks.map((block) => (
-                        <article className={`schedule-item ${block.kind} ${block.done ? 'block-done' : ''}`} key={block.id}>
+                        <article className={`schedule-item ${block.kind} ${block.done ? 'block-done' : ''} ${block.id === currentBlock?.id ? 'schedule-item-current' : ''}`} key={block.id} aria-current={block.id === currentBlock?.id ? 'time' : undefined}>
                           <div className="item-time"><span>{formatTime(block.start)}</span><span>{formatTime(block.end)}</span></div>
                           <span className="timeline-line" aria-hidden="true"><i /></span>
                           <div className="item-card">

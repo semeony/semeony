@@ -20,7 +20,7 @@ npm run preview
 
 Daywell is an installable Progressive Web App. Visit the site over HTTPS and choose **Install Daywell** in the app or your browser menu. On iPhone or iPad, open the Share menu in Safari and choose **Add to Home Screen**.
 
-The app shell is cached for offline use. Guest schedules remain available offline because they are stored in that browser. Account sign-in and Supabase schedule syncing require an internet connection; account schedules are not cached locally. Unsynced account changes retry while the current app session remains open and reconnects.
+The app shell is cached for offline use. Guest schedules remain available offline because they are stored in that browser. Account sign-in and Supabase schedule syncing require an internet connection; account schedules are not cached locally. Unsynced account changes retry while the current app session remains open and reconnects. The live timeline follows the device's local clock and can show browser notifications for scheduled blocks while Daywell is open and notification permission is granted. Push notifications when the app is closed are not configured.
 
 ## GitHub Pages deployment
 

@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock3,
   Coffee,
+  Download,
   Eye,
   EyeOff,
   Heart,
@@ -51,6 +52,10 @@ type DayPlan = {
 }
 
 type AuthMode = 'login' | 'register' | 'recovery'
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
 
 const STORAGE_KEY = 'daywell-plan-v2'
 const commitmentFormat = /^(\d{1,2}:\d{2})\s+to\s+(\d{1,2}:\d{2})\s+(.+)$/i
@@ -256,6 +261,63 @@ function App() {
   const [taskText, setTaskText] = useState('')
   const [commitmentText, setCommitmentText] = useState('')
   const [formError, setFormError] = useState('')
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [installMessage, setInstallMessage] = useState('')
+  const [appInstalled, setAppInstalled] = useState(false)
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+
+  useEffect(() => {
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    const handleInstalled = () => {
+      setAppInstalled(true)
+      setInstallPrompt(null)
+      setInstallMessage('Daywell is installed and ready on your device.')
+    }
+    const handleOnline = () => {
+      setIsOnline(true)
+      if (user && planVersion > 0) setSyncRetry((retry) => retry + 1)
+    }
+    const handleOffline = () => setIsOnline(false)
+
+    setAppInstalled(
+      window.matchMedia('(display-mode: standalone)').matches ||
+      ('standalone' in navigator && navigator.standalone === true),
+    )
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt)
+    window.addEventListener('appinstalled', handleInstalled)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt)
+      window.removeEventListener('appinstalled', handleInstalled)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [planVersion, user])
+
+  async function handleInstallApp() {
+    setInstallMessage('')
+    if (!installPrompt) {
+      setInstallMessage('Open your browser menu and choose Install Daywell or Add to Home Screen.')
+      return
+    }
+    try {
+      await installPrompt.prompt()
+      const result = await installPrompt.userChoice
+      setInstallPrompt(null)
+      setInstallMessage(
+        result.outcome === 'accepted'
+          ? 'Daywell is installing on your device.'
+          : 'Installation was cancelled. You can install Daywell later from your browser menu.',
+      )
+    } catch (error) {
+      console.error('Daywell installation could not be started.', error)
+      setInstallMessage('Daywell could not be installed right now. Try your browser menu instead.')
+    }
+  }
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -666,6 +728,9 @@ function App() {
             <div className="guest-divider"><span>OR</span></div>
             <button className="guest-button" type="button" onClick={() => { setShowLogin(false); setShowSetup(!plan) }}>Continue without an account <ArrowRight size={16} /></button>
             <p className="login-privacy"><LockKeyhole size={13} /> Your planner is saved in this browser only.</p>
+            {!appInstalled && <button className="install-app-button login-install-button" type="button" onClick={handleInstallApp}><Download size={16} /> Install Daywell</button>}
+            {installMessage && <p className="install-message" role="status">{installMessage}</p>}
+            {!isOnline && <p className="offline-message" role="status">You are offline. Sign in and account sync need an internet connection.</p>}
           </div>
           <footer className="login-footer">DAYWELL <span>|</span> PLAN AT YOUR OWN PACE</footer>
         </section>
@@ -690,6 +755,8 @@ function App() {
           </button>
         </nav>
         <div className="sidebar-bottom">
+          {!appInstalled && <button className="install-app-button" type="button" onClick={handleInstallApp}><Download size={16} /> Install Daywell</button>}
+          {installMessage && <p className="install-message" role="status">{installMessage}</p>}
           <div className="gentle-note">
             <span className="note-icon"><Heart size={16} /></span>
             <p>A note for today</p>
@@ -711,6 +778,7 @@ function App() {
             <button className="avatar" aria-label="Open day planner settings" onClick={() => setShowSetup(true)}>D</button>
           </div>
         </header>
+        {!isOnline && <p className="offline-banner" role="status">You are offline. Guest schedules stay on this device, and account sync will resume when you reconnect.</p>}
         {storageError && <div className="storage-notice" role="alert">{storageError}{user && <button type="button" onClick={() => planVersion > 0 ? setSyncRetry((retry) => retry + 1) : setLoadRetry((retry) => retry + 1)}>{planVersion > 0 ? 'Retry sync' : 'Reload schedule'}</button>}</div>}
 
         {showSetup ? (

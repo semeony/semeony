@@ -503,3 +503,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .auth-preview-note svg { color: var(--accent-blue); }
 .login-input-wrap:focus-within { border-color: var(--accent-blue); }
 .guest-button:hover { border-color: var(--accent-blue); background: #eaf4ff; }
+.install-app-button { width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 13px; padding: 10px 12px; border: 1px solid #bfd7f8; border-radius: 8px; background: linear-gradient(120deg, #eff5ff, #ebfbfd); color: #174ea6; font-size: 13px; font-weight: 700; cursor: pointer; }
+.install-app-button:hover { border-color: var(--accent-blue); background: linear-gradient(120deg, #e5efff, #e2fafd); }
+.login-install-button { max-width: 405px; margin: 17px auto 0; }
+.install-message { margin: -5px 0 13px; color: #155eaa; font-size: 12px; line-height: 1.5; text-align: center; }
+.login-form-wrap > .install-message { margin: 12px 0 0; }
+.offline-message, .offline-banner { border: 1px solid #c9e5f2; border-radius: 8px; background: #edf8fc; color: #155eaa; font-size: 13px; line-height: 1.55; }
+.offline-message { margin: 14px 0 0; padding: 10px 12px; text-align: center; }
+.offline-banner { max-width: 755px; margin: 18px auto -28px; padding: 10px 14px; }
+.sidebar .install-message { text-align: left; }
+@media (max-width: 650px) {
+  .offline-banner { margin: 12px 17px -18px; }
+}

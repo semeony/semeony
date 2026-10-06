@@ -16,6 +16,12 @@ npm run build
 npm run preview
 ```
 
+## Install Daywell
+
+Daywell is an installable Progressive Web App. Visit the site over HTTPS and choose **Install Daywell** in the app or your browser menu. On iPhone or iPad, open the Share menu in Safari and choose **Add to Home Screen**.
+
+The app shell is cached for offline use. Guest schedules remain available offline because they are stored in that browser. Account sign-in and Supabase schedule syncing require an internet connection; account schedules are not cached locally. Unsynced account changes retry while the current app session remains open and reconnects.
+
 ## GitHub Pages deployment
 
 The workflow in `.github/workflows/deploy.yml` builds and deploys the site when changes are pushed to `main` (or when run manually). In the repository, open **Settings → Pages** and select **GitHub Actions** as the build and deployment source. The site is published at `https://semeony.github.io/semeony/`.

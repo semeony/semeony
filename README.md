@@ -1,6 +1,6 @@
 # Daywell
 
-Daywell is a responsive, accessible day planner built with React, TypeScript, and Vite. Add your energy, working hours, priorities and fixed commitments to build a practical schedule. Your schedule is saved in this browser.
+Daywell is a responsive, accessible daily planner built with React, TypeScript, Vite, and Supabase. Add your energy, working hours, priorities, and fixed plans to build a schedule. Guest plans stay in the current browser. Signed-in plans sync to the user's Supabase account.
 
 ## Run locally
 
@@ -18,10 +18,14 @@ npm run preview
 
 ## GitHub Pages deployment
 
-The workflow in `.github/workflows/deploy.yml` builds and deploys the site when changes are pushed to `main` (or when run manually). In the repository, open **Settings → Pages** and select **GitHub Actions** as the build and deployment source. The first deployment will publish the site at `https://<owner>.github.io/<repository>/`.
+The workflow in `.github/workflows/deploy.yml` builds and deploys the site when changes are pushed to `main` (or when run manually). In the repository, open **Settings → Pages** and select **GitHub Actions** as the build and deployment source. The site is published at `https://semeony.github.io/semeony/`.
 
-## Privacy and security boundary
+## Connect Supabase
 
-This is a static, browser-only application. Planner data is stored in `localStorage` on the current device and is not sent to a server. It does **not** provide user accounts, secure password storage, server-managed sessions, role-based access control, or a database. Browser-side validation improves usability but is not a security boundary. Do not enter sensitive information. Implementing real authentication and authorization requires a trusted backend or identity provider; GitHub Pages cannot host that backend. GitHub Pages serves sites over HTTPS.
+1. Create a Supabase project and confirm email authentication is enabled under **Authentication → Providers → Email**.
+2. In the Supabase SQL Editor, run [`supabase/migrations/20261006133000_create_daily_plans.sql`](./supabase/migrations/20261006133000_create_daily_plans.sql). It creates the daily plan table, enables row-level security, and only allows an authenticated user to read or change rows with their own user ID.
+3. In **Authentication → URL Configuration**, set the site URL to `https://semeony.github.io/semeony/` and add that exact address to the allowed redirect URLs. This is used for email confirmation and password recovery.
+4. Copy `.env.example` to `.env` for local development and fill in the project's **Project URL** and **publishable/anon key** from Supabase project settings. Use the legacy `anon` key if the dashboard does not show a publishable key. Then run `npm run dev`.
+5. In the GitHub repository, open **Settings → Secrets and variables → Actions → Variables** and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Run the Pages workflow again, or push a new commit.
 
-The sign-in screen is a visual preview only. It never sends or stores the password entered there. Use **Continue without an account** to open the planner. Real sign in, account creation and password recovery are unavailable until an authentication service is connected.
+The Supabase URL and publishable/anon key are public client settings and are included in the static site build. Never use or publish the Supabase `service_role` key in this app. Keep row-level security enabled; the client relies on the supplied migration to keep account data isolated. Supabase handles password verification, account sessions, email confirmation, and password recovery. The app stores account schedules in Supabase and keeps guest schedules in the browser's local storage. The migration can be safely run again to restore its policies and trigger.

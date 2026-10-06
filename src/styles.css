@@ -314,6 +314,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .login-footer span { color: #a47a4c; }
 .storage-notice { border-color: #dfc29d; background: #faf0e3; color: #754b31; }
 .form-error { background: #f8e9e2; color: #814434; }
+.storage-notice { display: flex; align-items: center; gap: 12px; }
+.storage-notice button { flex: 0 0 auto; padding: 6px 9px; border: 1px solid #d4b790; border-radius: 6px; background: #fffaf1; color: #684c2f; font-size: 10px; font-weight: 700; cursor: pointer; }
+.storage-notice button:hover { background: #f4e6d0; }
+.auth-loading { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 12px; background: radial-gradient(ellipse at 50% 42%, #e9ecdf, transparent 42%), #f3f1e8; color: #55664e; }
+.auth-loading .brand-mark { width: 44px; height: 44px; border-radius: 14px; }
+.auth-loading p { margin: 0; font-size: 12px; font-weight: 600; }
 
 .signout-button { display: flex; align-items: center; gap: 8px; margin: 17px 4px 0; padding: 0; border: 0; background: none; color: #858d87; font-size: 10px; cursor: pointer; }
 .signout-button:hover { color: #405c47; }
@@ -365,8 +371,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .forgot-button { justify-self: end; margin-top: -8px; border: 0; background: transparent; color: #597354; font-size: 10px; font-weight: 700; cursor: pointer; }
 .forgot-button:hover, .auth-switch button:hover { text-decoration: underline; }
 .auth-notice { margin: -3px 0 0; padding: 11px 12px; border: 1px solid #e9d8b8; border-radius: 7px; background: #fcf7ed; color: #685a40; font-size: 10px; line-height: 1.6; }
+.login-field input:disabled, .login-input-wrap:has(input:disabled) { cursor: not-allowed; opacity: .68; }
+.forgot-button:disabled { cursor: not-allowed; opacity: .55; }
 .login-submit { height: 47px; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1px; border: 0; border-radius: 8px; background: #4c674f; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; transition: background .15s, transform .15s; }
 .login-submit:hover { transform: translateY(-1px); background: #3c5740; }
+.login-submit:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 .auth-switch { display: flex; justify-content: center; gap: 5px; margin: 22px 0; color: #858a85; font-size: 10px; }
 .auth-switch button { padding: 0; border: 0; background: none; color: #49664c; font-size: inherit; font-weight: 800; cursor: pointer; }
 .guest-divider { position: relative; height: 1px; margin: 28px 0 22px; background: #e8e6df; text-align: center; }

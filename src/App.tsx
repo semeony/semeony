@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import type { User } from '@supabase/supabase-js'
 import {
   ArrowDown,
   ArrowRight,
@@ -25,6 +26,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { supabase, supabaseConfigured } from './lib/supabase'
 
 type Energy = 'low' | 'steady' | 'high'
 type BlockKind = 'task' | 'commitment' | 'break'
@@ -47,6 +49,8 @@ type DayPlan = {
   blocks: ScheduleBlock[]
   unscheduled: string[]
 }
+
+type AuthMode = 'login' | 'register' | 'recovery'
 
 const STORAGE_KEY = 'daywell-plan-v2'
 const commitmentFormat = /^(\d{1,2}:\d{2})\s+to\s+(\d{1,2}:\d{2})\s+(.+)$/i
@@ -226,9 +230,21 @@ function App() {
   const [storageError, setStorageError] = useState(savedState.error)
   const [showSetup, setShowSetup] = useState(() => !savedState.plan)
   const [showLogin, setShowLogin] = useState(true)
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [showPassword, setShowPassword] = useState(false)
   const [authNotice, setAuthNotice] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [user, setUser] = useState<User | null>(null)
+  const [authReady, setAuthReady] = useState(!supabaseConfigured)
+  const [planLoading, setPlanLoading] = useState(false)
+  const [planVersion, setPlanVersion] = useState(0)
+  const [syncRetry, setSyncRetry] = useState(0)
+  const [loadRetry, setLoadRetry] = useState(0)
+  const [syncStatus, setSyncStatus] = useState('')
+  const syncQueue = useRef<Promise<void>>(Promise.resolve())
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
   const [addTaskError, setAddTaskError] = useState('')
@@ -241,20 +257,195 @@ function App() {
   const [commitmentText, setCommitmentText] = useState('')
   const [formError, setFormError] = useState('')
 
-  function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setAuthNotice('Accounts are not connected on this site yet. Your password was not sent or saved.')
+    setAuthNotice('')
+    if (!supabase) {
+      setAuthNotice('Account sign in is not configured yet. You can still continue as a guest.')
+      return
+    }
+    setAuthBusy(true)
+    try {
+      if (authMode === 'recovery') {
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) throw error
+        setPassword('')
+        setAuthMode('login')
+        setAuthNotice('Your password has been updated. You can now sign in.')
+      } else if (authMode === 'register') {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { full_name: fullName.trim() },
+            emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
+          },
+        })
+        if (error) throw error
+        setPassword('')
+        if (data.session) {
+          setShowLogin(false)
+          setAuthNotice('')
+        } else {
+          setAuthNotice('Check your email for a confirmation link to finish creating your account.')
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (error) throw error
+        setPassword('')
+        setShowLogin(false)
+      }
+    } catch (error) {
+      setAuthNotice(error instanceof Error ? error.message : 'Authentication failed. Please try again.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  async function sendPasswordRecovery() {
+    setAuthNotice('')
+    if (!supabase) {
+      setAuthNotice('Password recovery is unavailable until Supabase is configured.')
+      return
+    }
+    if (!email.trim()) {
+      setAuthNotice('Enter your email address first, then choose password recovery.')
+      return
+    }
+    setAuthBusy(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+      })
+      if (error) throw error
+      setAuthNotice('If an account exists for that address, a password recovery link is on its way.')
+    } catch (error) {
+      setAuthNotice(error instanceof Error ? error.message : 'Could not send the password recovery email.')
+    } finally {
+      setAuthBusy(false)
+    }
   }
 
   useEffect(() => {
-    if (!plan) return
+    if (!supabase) return
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+      setAuthReady(true)
+      if (event === 'SIGNED_IN' && session) setShowLogin(false)
+      if (event === 'SIGNED_OUT') setShowLogin(true)
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode('recovery')
+        setShowLogin(true)
+        setAuthNotice('')
+      }
+    })
+
+    void Promise.resolve(supabase.auth.getSession()).then(({ data, error }) => {
+      if (error) {
+        setAuthNotice('Could not restore your sign-in session. Please sign in again.')
+        setShowLogin(true)
+      } else if (data.session) {
+        setUser(data.session.user)
+        setShowLogin(false)
+      }
+      setAuthReady(true)
+    }).catch(() => {
+      setAuthNotice('Could not restore your sign-in session. Please sign in again.')
+      setAuthReady(true)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!supabase || !authReady) return
+    let cancelled = false
+
+    if (!user) {
+      const localPlan = readSavedPlan()
+      setPlan(localPlan.plan)
+      setStorageError(localPlan.error)
+      setShowSetup(!localPlan.plan)
+      setPlanLoading(false)
+      setPlanVersion(0)
+      setSyncStatus('')
+      return
+    }
+
+    setPlanLoading(true)
+    setPlan(null)
+    setShowSetup(true)
+    setStorageError(null)
+    setSyncStatus('Loading your saved schedule')
+    void Promise.resolve(
+      supabase
+        .from('daily_plans')
+        .select('plan')
+        .eq('user_id', user.id)
+        .eq('plan_date', today)
+        .maybeSingle(),
+    )
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) throw error
+        if (data && (!isDayPlan(data.plan) || data.plan.date !== today)) {
+          throw new Error('The saved schedule has an invalid format.')
+        }
+        const loadedPlan = data ? data.plan : null
+        setPlan(loadedPlan)
+        setShowSetup(!loadedPlan)
+        setPlanVersion(0)
+        setSyncStatus('Your schedule is synced to your account')
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setStorageError(error instanceof Error ? `Could not load your saved schedule: ${error.message}` : 'Could not load your saved schedule.')
+        setSyncStatus('')
+      })
+      .finally(() => {
+        if (!cancelled) setPlanLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [authReady, loadRetry, today, user])
+
+  useEffect(() => {
+    if (user || !plan || planLoading) return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(plan))
       setStorageError(null)
     } catch {
       setStorageError('Your plan could not be saved in this browser. It will be lost when you leave this page.')
     }
-  }, [plan])
+  }, [plan, planLoading, user])
+
+  useEffect(() => {
+    if (!supabase || !authReady || !user || planLoading || planVersion === 0) return
+    const client = supabase
+    const timeout = window.setTimeout(() => {
+      setSyncStatus('Saving your schedule')
+      const request = plan
+        ? client.from('daily_plans').upsert({
+            user_id: user.id,
+            plan_date: today,
+            plan,
+          }, { onConflict: 'user_id,plan_date' })
+        : client.from('daily_plans').delete().eq('user_id', user.id).eq('plan_date', today)
+      syncQueue.current = syncQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          const { error } = await request
+          if (error) throw error
+          setStorageError(null)
+          setSyncStatus('Your schedule is synced to your account')
+        })
+        .catch((error: unknown) => {
+          setStorageError(error instanceof Error ? `Could not sync your schedule: ${error.message}` : 'Could not sync your schedule.')
+          setSyncStatus('')
+        })
+    }, 350)
+    return () => window.clearTimeout(timeout)
+  }, [authReady, plan, planLoading, planVersion, syncRetry, today, user])
 
   const completedCount = plan?.blocks.filter((block) => block.done && block.kind === 'task').length ?? 0
   const taskCount = plan?.blocks.filter((block) => block.kind === 'task').length ?? 0
@@ -312,6 +503,7 @@ function App() {
       blocks: schedule.blocks,
       unscheduled: schedule.unscheduled,
     })
+    setPlanVersion((version) => version + 1)
     setShowSetup(false)
   }
 
@@ -320,6 +512,7 @@ function App() {
       ...current,
       blocks: current.blocks.map((block) => block.id === id ? { ...block, done: !block.done } : block),
     } : current)
+    setPlanVersion((version) => version + 1)
   }
 
   function addTask(event: FormEvent<HTMLFormElement>) {
@@ -349,19 +542,23 @@ function App() {
         done: false,
       }].sort((a, b) => a.start - b.start),
     })
+    setPlanVersion((version) => version + 1)
     setNewTask('')
     setAddTaskError('')
     setShowAddTask(false)
   }
 
   function resetPlan() {
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-      setStorageError(null)
-    } catch {
-      setStorageError('Your saved plan could not be cleared from this browser.')
+    if (!user) {
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+        setStorageError(null)
+      } catch {
+        setStorageError('Your saved plan could not be cleared from this browser.')
+      }
     }
     setPlan(null)
+    if (user) setPlanVersion((version) => version + 1)
     setShowSetup(true)
     setTaskText('')
     setCommitmentText('')
@@ -369,6 +566,40 @@ function App() {
     setEnergy('steady')
     setShowAddTask(false)
     setMenuOpen(false)
+  }
+
+  async function handleSignOut() {
+    if (!supabase || !user) {
+      setShowLogin(true)
+      return
+    }
+    setAuthBusy(true)
+    try {
+      const saveRequest = plan
+        ? supabase.from('daily_plans').upsert({
+            user_id: user.id,
+            plan_date: today,
+            plan,
+          }, { onConflict: 'user_id,plan_date' })
+        : supabase.from('daily_plans').delete().eq('user_id', user.id).eq('plan_date', today)
+      const { error: saveError } = await saveRequest
+      if (saveError) throw saveError
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    } catch (error) {
+      setStorageError(error instanceof Error ? `Could not sign out: ${error.message}` : 'Could not sign out.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  if (!authReady || planLoading) {
+    return (
+      <main className="auth-loading" aria-live="polite">
+        <span className="brand-mark"><Sunrise size={20} /></span>
+        <p>{planLoading ? 'Loading your schedule' : 'Checking your account'}</p>
+      </main>
+    )
   }
 
   if (showLogin) {
@@ -398,34 +629,40 @@ function App() {
               <span>daywell<span className="brand-period">.</span></span>
             </div>
             <div className="login-heading">
-              <span className="login-kicker">{authMode === 'login' ? 'WELCOME BACK' : 'GET STARTED'}</span>
-              <h1 id="login-title">{authMode === 'login' ? 'Good to see you.' : 'Make space for your day.'}</h1>
-              <p>{authMode === 'login' ? 'Sign in to pick up where you left off.' : 'Create an account to begin planning.'}</p>
+              <span className="login-kicker">{authMode === 'login' ? 'WELCOME BACK' : authMode === 'register' ? 'GET STARTED' : 'ACCOUNT RECOVERY'}</span>
+              <h1 id="login-title">{authMode === 'login' ? 'Good to see you.' : authMode === 'register' ? 'Make space for your day.' : 'Choose a new password.'}</h1>
+              <p>{authMode === 'login' ? 'Sign in to pick up where you left off.' : authMode === 'register' ? 'Create an account to begin planning.' : 'Set a new password for your account.'}</p>
             </div>
-            <p className="auth-preview-note"><LockKeyhole size={15} /> Account sign in is not connected yet. Continue as a guest to use your planner.</p>
+            <p className="auth-preview-note"><LockKeyhole size={15} /> {supabaseConfigured ? 'Your account and schedule are protected by Supabase authentication.' : 'Account sign in is not configured yet. Add your Supabase project settings to enable accounts, or continue as a guest.'}</p>
             <form className="login-form" onSubmit={handleAuthSubmit}>
               {authMode === 'register' && (
                 <label className="login-field">
                   <span>Your name</span>
-                  <input autoComplete="name" maxLength={80} placeholder="How should we address you?" required />
+                  <input autoComplete="name" maxLength={80} placeholder="How should we address you?" required disabled={!supabase || authBusy} value={fullName} onChange={(event) => setFullName(event.target.value)} />
+                </label>
+              )}
+              {authMode !== 'recovery' && (
+                <label className="login-field">
+                  <span>Email address</span>
+                  <span className="login-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" maxLength={254} placeholder="you@example.com" required disabled={!supabase || authBusy} value={email} onChange={(event) => setEmail(event.target.value)} /></span>
                 </label>
               )}
               <label className="login-field">
-                <span>Email address</span>
-                <span className="login-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" maxLength={254} placeholder="you@example.com" required /></span>
+                <span>{authMode === 'recovery' ? 'New password' : 'Password'}</span>
+                <span className="login-input-wrap"><LockKeyhole size={17} /><input type={showPassword ? 'text' : 'password'} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={8} maxLength={128} placeholder="At least 8 characters" required disabled={!supabase || authBusy} value={password} onChange={(event) => setPassword(event.target.value)} /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>
               </label>
-              <label className="login-field">
-                <span>Password</span>
-                <span className="login-input-wrap"><LockKeyhole size={17} /><input type={showPassword ? 'text' : 'password'} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={8} maxLength={128} placeholder="At least 8 characters" required /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>
-              </label>
-              {authMode === 'login' && <button className="forgot-button" type="button" onClick={() => setAuthNotice('Password recovery is not available because accounts are not connected to this site.')}>Forgot password?</button>}
+              {authMode === 'login' && <button className="forgot-button" type="button" disabled={!supabase || authBusy} onClick={sendPasswordRecovery}>Forgot password?</button>}
               {authNotice && <p className="auth-notice" role="status">{authNotice}</p>}
-              <button className="login-submit" type="submit">{authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></button>
+              <button className="login-submit" type="submit" disabled={!supabase || authBusy}>{authBusy ? 'Please wait' : authMode === 'login' ? 'Sign in' : authMode === 'register' ? 'Create account' : 'Update password'} <ArrowRight size={17} /></button>
             </form>
-            <p className="auth-switch">
-              {authMode === 'login' ? 'New to Daywell?' : 'Already have an account?'}
-              <button type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthNotice('') }}>{authMode === 'login' ? 'Create an account' : 'Sign in'}</button>
-            </p>
+            {authMode === 'recovery' ? (
+              <p className="auth-switch">Remembered your password? <button type="button" onClick={() => { setAuthMode('login'); setPassword(''); setAuthNotice('') }}>Back to sign in</button></p>
+            ) : (
+              <p className="auth-switch">
+                {authMode === 'login' ? 'New to Daywell?' : 'Already have an account?'}
+                <button type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthNotice('') }}>{authMode === 'login' ? 'Create an account' : 'Sign in'}</button>
+              </p>
+            )}
             <div className="guest-divider"><span>OR</span></div>
             <button className="guest-button" type="button" onClick={() => { setShowLogin(false); setShowSetup(!plan) }}>Continue without an account <ArrowRight size={16} /></button>
             <p className="login-privacy"><LockKeyhole size={13} /> Your planner is saved in this browser only.</p>
@@ -458,8 +695,8 @@ function App() {
             <p>A note for today</p>
             <span>Make space for what matters to you.</span>
           </div>
-          <div className="local-note"><span className="privacy-dot" /> Saved just on this device</div>
-          <button className="signout-button" onClick={() => { setShowLogin(true); setAuthNotice('') }}><LogOut size={15} /> Open sign in preview</button>
+          <div className="local-note"><span className="privacy-dot" /> {user ? 'Synced to your account' : 'Saved just on this device'}</div>
+          <button className="signout-button" disabled={authBusy} onClick={handleSignOut}><LogOut size={15} /> {user ? `Sign out${user.email ? ` of ${user.email}` : ''}` : 'Open sign in'}</button>
         </div>
       </aside>
 
@@ -470,11 +707,11 @@ function App() {
           </button>
           <div className="breadcrumb">Your space <span>›</span> <strong>{showSetup ? 'Plan a day' : 'My day'}</strong></div>
           <div className="topbar-right">
-            <span className="local-status"><span className="privacy-dot" /> Private to this browser</span>
+            <span className="local-status"><span className="privacy-dot" /> {user ? syncStatus || 'Synced to your account' : 'Private to this browser'}</span>
             <button className="avatar" aria-label="Open day planner settings" onClick={() => setShowSetup(true)}>D</button>
           </div>
         </header>
-        {storageError && <div className="storage-notice" role="alert">{storageError}</div>}
+        {storageError && <div className="storage-notice" role="alert">{storageError}{user && <button type="button" onClick={() => planVersion > 0 ? setSyncRetry((retry) => retry + 1) : setLoadRetry((retry) => retry + 1)}>{planVersion > 0 ? 'Retry sync' : 'Reload schedule'}</button>}</div>}
 
         {showSetup ? (
           <section className="setup-wrap" aria-labelledby="setup-title">

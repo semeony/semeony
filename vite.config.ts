@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/daywell-192.png', 'icons/daywell-512.png', 'icons/daywell-512-maskable.png'],
+      includeAssets: ['icons/daywell-sunrise-192.png', 'icons/daywell-sunrise-512.png', 'icons/daywell-sunrise-512-maskable.png'],
       manifest: {
         id: './',
         name: 'Daywell Daily Planner',
@@ -22,19 +22,19 @@ export default defineConfig({
         categories: ['productivity', 'lifestyle'],
         icons: [
           {
-            src: './icons/daywell-192.png',
+            src: './icons/daywell-sunrise-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: './icons/daywell-512.png',
+            src: './icons/daywell-sunrise-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: './icons/daywell-512-maskable.png',
+            src: './icons/daywell-sunrise-512-maskable.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

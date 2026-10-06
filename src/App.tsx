@@ -3,17 +3,22 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUpRight,
+  CalendarDays,
   Check,
   ChevronDown,
   Clock3,
   Coffee,
+  Eye,
+  EyeOff,
   Heart,
   Leaf,
   ListTodo,
+  LockKeyhole,
+  LogOut,
+  Mail,
   Menu,
   Plus,
   RotateCcw,
-  Sparkles,
   Sun,
   Sunrise,
   Sunset,
@@ -44,6 +49,7 @@ type DayPlan = {
 }
 
 const STORAGE_KEY = 'daywell-plan-v2'
+const commitmentFormat = /^(\d{1,2}:\d{2})\s+to\s+(\d{1,2}:\d{2})\s+(.+)$/i
 const energyOptions: { id: Energy; label: string; detail: string; icon: typeof Leaf }[] = [
   { id: 'low', label: 'Taking it slow', detail: 'Keep things gentle', icon: Leaf },
   { id: 'steady', label: 'Doing alright', detail: 'A little of everything', icon: Sun },
@@ -151,7 +157,7 @@ function createSchedule(
   commitments: string[],
 ): { blocks: ScheduleBlock[]; unscheduled: string[] } {
   const events = commitments.flatMap((line) => {
-    const match = line.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\s+(.+)$/)
+    const match = line.match(commitmentFormat)
     if (!match) return []
     const eventStart = minutesFromTime(match[1])
     const eventEnd = minutesFromTime(match[2])
@@ -219,6 +225,10 @@ function App() {
   const [plan, setPlan] = useState<DayPlan | null>(savedState.plan)
   const [storageError, setStorageError] = useState(savedState.error)
   const [showSetup, setShowSetup] = useState(() => !savedState.plan)
+  const [showLogin, setShowLogin] = useState(true)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [showPassword, setShowPassword] = useState(false)
+  const [authNotice, setAuthNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
   const [addTaskError, setAddTaskError] = useState('')
@@ -230,6 +240,11 @@ function App() {
   const [taskText, setTaskText] = useState('')
   const [commitmentText, setCommitmentText] = useState('')
   const [formError, setFormError] = useState('')
+
+  function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAuthNotice('Accounts are not connected on this site yet. Your password was not sent or saved.')
+  }
 
   useEffect(() => {
     if (!plan) return
@@ -274,7 +289,7 @@ function App() {
     }
     const validCommitments = commitmentText.split('\n').map((line) => line.trim()).filter(Boolean)
     const parsedCommitments = validCommitments.map((line) => {
-      const match = line.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})\s+(.+)$/)
+      const match = line.match(commitmentFormat)
       if (!match || !match[3].trim() || !validTime(match[1]) || !validTime(match[2])) return null
       const eventStart = minutesFromTime(match[1])
       const eventEnd = minutesFromTime(match[2])
@@ -284,7 +299,7 @@ function App() {
     const sortedCommitments = parsedCommitments.filter((event) => event !== null).sort((a, b) => a.start - b.start)
     const hasOverlap = sortedCommitments.some((event, index) => index > 0 && event.start < sortedCommitments[index - 1].end)
     if (parsedCommitments.some((event) => event === null) || hasOverlap) {
-      setFormError('Use “9:00-10:00 Team check-in” for each commitment. Times must fit your day and not overlap.')
+      setFormError('Use “9:00 to 10:00 Team check-in” for each commitment. Times must fit your day and cannot overlap.')
       return
     }
     const schedule = createSchedule(start, end, energy, tasks, validCommitments)
@@ -356,6 +371,71 @@ function App() {
     setMenuOpen(false)
   }
 
+  if (showLogin) {
+    return (
+      <main className="login-page">
+        <section className="login-story" aria-label="About Daywell">
+          <a className="brand login-brand" href="#" aria-label="Daywell home">
+            <span className="brand-mark"><Sunrise size={20} strokeWidth={2.2} /></span>
+            <span>daywell<span className="brand-period">.</span></span>
+          </a>
+          <div className="story-copy">
+            <span className="story-kicker"><span /> YOUR DAY, WITH A LITTLE MORE SPACE</span>
+            <h1>A calmer way<br />to meet your <em>day.</em></h1>
+            <p>Make a schedule that fits your real life, not the other way around.</p>
+          </div>
+          <div className="story-card">
+            <span className="story-card-icon"><CalendarDays size={20} /></span>
+            <div><strong>Room for what matters</strong><span>Work, plans and time to recharge.</span></div>
+            <span className="story-check"><Check size={14} /></span>
+          </div>
+          <span className="story-footnote">A little structure. A lot more breathing room.</span>
+        </section>
+        <section className="login-panel" aria-labelledby="login-title">
+          <div className="login-form-wrap">
+            <div className="login-mobile-brand">
+              <span className="brand-mark"><Sunrise size={20} /></span>
+              <span>daywell<span className="brand-period">.</span></span>
+            </div>
+            <div className="login-heading">
+              <span className="login-kicker">{authMode === 'login' ? 'WELCOME BACK' : 'GET STARTED'}</span>
+              <h1 id="login-title">{authMode === 'login' ? 'Good to see you.' : 'Make space for your day.'}</h1>
+              <p>{authMode === 'login' ? 'Sign in to pick up where you left off.' : 'Create an account to begin planning.'}</p>
+            </div>
+            <p className="auth-preview-note"><LockKeyhole size={15} /> Account sign in is not connected yet. Continue as a guest to use your planner.</p>
+            <form className="login-form" onSubmit={handleAuthSubmit}>
+              {authMode === 'register' && (
+                <label className="login-field">
+                  <span>Your name</span>
+                  <input autoComplete="name" maxLength={80} placeholder="How should we address you?" required />
+                </label>
+              )}
+              <label className="login-field">
+                <span>Email address</span>
+                <span className="login-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" maxLength={254} placeholder="you@example.com" required /></span>
+              </label>
+              <label className="login-field">
+                <span>Password</span>
+                <span className="login-input-wrap"><LockKeyhole size={17} /><input type={showPassword ? 'text' : 'password'} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={8} maxLength={128} placeholder="At least 8 characters" required /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>
+              </label>
+              {authMode === 'login' && <button className="forgot-button" type="button" onClick={() => setAuthNotice('Password recovery is not available because accounts are not connected to this site.')}>Forgot password?</button>}
+              {authNotice && <p className="auth-notice" role="status">{authNotice}</p>}
+              <button className="login-submit" type="submit">{authMode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></button>
+            </form>
+            <p className="auth-switch">
+              {authMode === 'login' ? 'New to Daywell?' : 'Already have an account?'}
+              <button type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthNotice('') }}>{authMode === 'login' ? 'Create an account' : 'Sign in'}</button>
+            </p>
+            <div className="guest-divider"><span>OR</span></div>
+            <button className="guest-button" type="button" onClick={() => { setShowLogin(false); setShowSetup(!plan) }}>Continue without an account <ArrowRight size={16} /></button>
+            <p className="login-privacy"><LockKeyhole size={13} /> Your planner is saved in this browser only.</p>
+          </div>
+          <footer className="login-footer">DAYWELL <span>|</span> PLAN AT YOUR OWN PACE</footer>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
@@ -369,16 +449,17 @@ function App() {
             <ListTodo size={18} /> <span>My day</span><span className="nav-today">TODAY</span>
           </button>
           <button className="nav-item" onClick={() => { setShowSetup(true); setMenuOpen(false) }}>
-            <Sparkles size={18} /> <span>Plan a day</span>
+            <CalendarDays size={18} /> <span>Plan a day</span>
           </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="gentle-note">
             <span className="note-icon"><Heart size={16} /></span>
-            <p>A gentle reminder</p>
-            <span>You don’t have to do it all to have a good day.</span>
+            <p>A note for today</p>
+            <span>Make space for what matters to you.</span>
           </div>
           <div className="local-note"><span className="privacy-dot" /> Saved just on this device</div>
+          <button className="signout-button" onClick={() => { setShowLogin(true); setAuthNotice('') }}><LogOut size={15} /> Open sign in preview</button>
         </div>
       </aside>
 
@@ -387,7 +468,7 @@ function App() {
           <button className="icon-button mobile-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          <div className="breadcrumb">Your space <span>/</span> <strong>{showSetup ? 'Plan a day' : 'My day'}</strong></div>
+          <div className="breadcrumb">Your space <span>›</span> <strong>{showSetup ? 'Plan a day' : 'My day'}</strong></div>
           <div className="topbar-right">
             <span className="local-status"><span className="privacy-dot" /> Private to this browser</span>
             <button className="avatar" aria-label="Open day planner settings" onClick={() => setShowSetup(true)}>D</button>
@@ -398,15 +479,15 @@ function App() {
         {showSetup ? (
           <section className="setup-wrap" aria-labelledby="setup-title">
             <div className="setup-heading">
-              <div className="eyebrow"><span className="eyebrow-line" /> A LITTLE SPACE TO PLAN</div>
-              <h1 id="setup-title">Let’s make today<br />feel a little <em>more yours.</em></h1>
-              <p>No perfect routines required. Tell us what your day is really like, and we’ll help make a plan that fits.</p>
+              <div className="eyebrow"><span className="eyebrow-line" /> PLAN YOUR DAY</div>
+              <h1 id="setup-title">Make a plan<br />that fits <em>today.</em></h1>
+              <p>Tell us how you feel, what is already planned and what matters. We will shape a schedule around your day.</p>
             </div>
             <form className="planner-form" onSubmit={handleCreatePlan}>
               <div className="form-section">
                 <div className="section-heading">
                   <span className="step-number">01</span>
-                  <div><h2>How are you arriving today?</h2><p>Your energy is a good place to start.</p></div>
+                  <div><h2>How is your energy?</h2><p>Choose what feels closest today.</p></div>
                 </div>
                 <div className="energy-options" role="radiogroup" aria-label="How is your energy today?">
                   {energyOptions.map(({ id, label, detail, icon: Icon }) => (
@@ -422,7 +503,7 @@ function App() {
               <div className="form-section">
                 <div className="section-heading">
                   <span className="step-number">02</span>
-                  <div><h2>What’s already on your plate?</h2><p>Set your hours and make space for the things that can’t move.</p></div>
+                  <div><h2>What is already planned?</h2><p>Set your hours and add anything that cannot move.</p></div>
                 </div>
                 <div className="hours-row">
                   <label className="field-label">MY DAY STARTS <span className="time-input-wrap"><Sunrise size={15} /><input aria-label="Day start time" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></span></label>
@@ -430,26 +511,26 @@ function App() {
                   <label className="field-label">MY DAY ENDS <span className="time-input-wrap"><Sunset size={15} /><input aria-label="Day end time" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></span></label>
                 </div>
                 <label className="field-label textarea-label" htmlFor="commitments">FIXED PLANS <span className="optional-label">OPTIONAL</span></label>
-                <textarea id="commitments" className="text-area commitments-area" maxLength={1000} value={commitmentText} onChange={(event) => setCommitmentText(event.target.value)} placeholder={'9:00-9:30 Team check-in\n12:00-13:00 Lunch with Sam'} rows={2} />
-                <span className="field-hint">One per line, with a start and end time. We’ll plan around them.</span>
+                <textarea id="commitments" className="text-area commitments-area" maxLength={1000} value={commitmentText} onChange={(event) => setCommitmentText(event.target.value)} placeholder={'9:00 to 9:30 Team check-in\n12:00 to 13:00 Lunch with Sam'} rows={2} />
+                <span className="field-hint">One per line. Include the start time, end time and what it is.</span>
               </div>
 
               <div className="form-section">
                 <div className="section-heading">
                   <span className="step-number">03</span>
-                  <div><h2>What would make today feel good?</h2><p>Pick a few things that matter. Everything else can wait.</p></div>
+                  <div><h2>What would you like to get done?</h2><p>Add the things you want to make time for.</p></div>
                 </div>
                 <label className="field-label" htmlFor="priorities">THINGS I’D LIKE TO MAKE TIME FOR</label>
                 <textarea id="priorities" className="text-area" maxLength={1200} value={taskText} onChange={(event) => setTaskText(event.target.value)} placeholder={'Finish the project proposal\nGet outside for a walk\nCall Mum'} rows={3} required />
-                <span className="field-hint">Put your most important things first. One per line, up to 8.</span>
-                <label className="field-label intention-label" htmlFor="intention">MY LITTLE INTENTION <span className="optional-label">OPTIONAL</span></label>
-                <input id="intention" className="text-input" value={intention} onChange={(event) => setIntention(event.target.value)} maxLength={120} placeholder="e.g. Leave a little room to breathe" />
+                <span className="field-hint">Add up to 8 priorities, with the most important one first.</span>
+                <label className="field-label intention-label" htmlFor="intention">A NOTE TO YOURSELF <span className="optional-label">OPTIONAL</span></label>
+                <input id="intention" className="text-input" value={intention} onChange={(event) => setIntention(event.target.value)} maxLength={120} placeholder="What would you like to remember today?" />
               </div>
 
               {formError && <div className="form-error" role="alert">{formError}</div>}
               <div className="form-submit-row">
-                <span className="submit-reassurance"><Heart size={14} /> A plan, not a promise.</span>
-                <button className="primary-button" type="submit">Make my day <ArrowRight size={17} /></button>
+                <span className="submit-reassurance"><Heart size={14} /> Change your plan whenever you need.</span>
+                <button className="primary-button" type="submit">Build my schedule <ArrowRight size={17} /></button>
               </div>
             </form>
           </section>
@@ -457,24 +538,24 @@ function App() {
           <section className="day-view" aria-labelledby="day-title">
             <div className="day-heading">
               <div>
-                <div className="eyebrow"><span className="eyebrow-line" /> YOUR DAY, YOUR PACE</div>
-                <h1 id="day-title">A day with <em>a little room.</em></h1>
+                <div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div>
+                <h1 id="day-title">Here is <em>your day.</em></h1>
                 <p className="day-date"><Sun size={16} /> {dayLabel(plan.date)}</p>
               </div>
               <button className="outline-button" onClick={() => setShowSetup(true)}><RotateCcw size={15} /> Rethink my day</button>
             </div>
             <div className="intention-card">
               <span className="intention-icon"><Heart size={17} /></span>
-              <div><span className="intention-caption">A NOTE TO YOURSELF</span><p>{plan.intention || 'You don’t have to do it all to have a good day.'}</p></div>
-              <span className="intention-sparkle"><Sparkles size={17} /></span>
+              <div><span className="intention-caption">A NOTE TO YOURSELF</span><p>{plan.intention || 'Take the day one step at a time.'}</p></div>
+              <span className="intention-sparkle"><Clock3 size={17} /></span>
             </div>
             <div className="overview-row">
               <div className="progress-card">
-                <div className="progress-top"><span>TODAY’S MOMENTUM</span><strong>{completedCount}<small> / {taskCount} priorities</small></strong></div>
+                <div className="progress-top"><span>PRIORITIES COMPLETED</span><strong>{completedCount}<small> of {taskCount}</small></strong></div>
                 <div className="progress-track" role="progressbar" aria-label="Day's priorities completed" aria-valuenow={completedCount} aria-valuemin={0} aria-valuemax={taskCount || 1}><span style={{ width: `${completion}%` }} /></div>
-                <div className="progress-caption">{completion === 100 ? 'Everything you set out to do. Lovely.' : 'Every small step counts. You’re doing just fine.'}</div>
+                <div className="progress-caption">{completion === 100 ? 'All priorities are complete.' : 'Mark items complete as you go.'}</div>
               </div>
-              <button className="add-task-button" onClick={() => { setAddTaskError(''); setShowAddTask(true) }}><span><Plus size={18} /></span><strong>Add a little something</strong><ArrowUpRight size={16} /></button>
+              <button className="add-task-button" onClick={() => { setAddTaskError(''); setShowAddTask(true) }}><span><Plus size={18} /></span><strong>Add a priority</strong><ArrowUpRight size={16} /></button>
             </div>
             {groupedBlocks.length ? (
               <div className="schedule">
@@ -488,7 +569,7 @@ function App() {
                           <span className="timeline-line" aria-hidden="true"><i /></span>
                           <div className="item-card">
                             <div className="item-icon">{block.kind === 'break' ? <Coffee size={17} /> : block.kind === 'commitment' ? <Clock3 size={17} /> : <Check size={17} />}</div>
-                            <div className="item-content"><span className="item-type">{block.kind === 'task' ? 'A PRIORITY' : block.kind === 'commitment' ? 'ALREADY ON YOUR CALENDAR' : 'A MOMENT TO RESET'}</span><h3>{block.title}</h3><span className="item-duration">{block.end - block.start} min{block.kind === 'task' && plan.energy === 'low' ? ' · gentle focus' : ''}</span></div>
+                            <div className="item-content"><span className="item-type">{block.kind === 'task' ? 'A PRIORITY' : block.kind === 'commitment' ? 'ALREADY ON YOUR CALENDAR' : 'A MOMENT TO RESET'}</span><h3>{block.title}</h3><span className="item-duration">{block.end - block.start} min{block.kind === 'task' && plan.energy === 'low' ? '  |  gentle focus' : ''}</span></div>
                             {block.kind === 'task' && <button className={`complete-button ${block.done ? 'complete-button-done' : ''}`} aria-label={`${block.done ? 'Mark incomplete' : 'Mark complete'}: ${block.title}`} onClick={() => toggleBlock(block.id)}>{block.done ? <Check size={17} /> : <span />}</button>}
                           </div>
                         </article>
@@ -497,20 +578,20 @@ function App() {
                   </section>
                 ))}
               </div>
-            ) : <div className="empty-schedule"><Coffee size={25} /><p>A day with room to breathe. Add a little something whenever you’re ready.</p></div>}
+            ) : <div className="empty-schedule"><Coffee size={25} /><p>Your calendar is clear. Add a priority when you are ready.</p></div>}
             {plan.unscheduled.length > 0 && (
               <section className="unscheduled-card" aria-labelledby="unscheduled-title">
                 <h2 id="unscheduled-title">Still on your list</h2>
-                <p>These didn’t fit into the hours you set. You can rethink your day and make room for them.</p>
+                <p>These do not fit within your available hours. Adjust your schedule to make room.</p>
                 <ul>{plan.unscheduled.map((task, index) => <li key={`${task}-${index}`}>{task}</li>)}</ul>
                 <button className="outline-button" onClick={() => setShowSetup(true)}>Rethink my day <ArrowRight size={14} /></button>
               </section>
             )}
-            <footer className="day-footer"><span><Heart size={14} /> Your day doesn’t have to go to plan for it to be a good one.</span><button onClick={resetPlan}>Start fresh <ChevronDown size={14} /></button></footer>
+            <footer className="day-footer"><span><Heart size={14} /> Adjust your schedule at any time.</span><button onClick={resetPlan}>Clear schedule <ChevronDown size={14} /></button></footer>
           </section>
         ) : (
           <section className="empty-state">
-            <span className="empty-icon"><Sunrise size={28} /></span><h1>Your day is still unwritten.</h1><p>Take a moment to check in with yourself, then make a plan that fits the day you’re actually having.</p>
+            <span className="empty-icon"><Sunrise size={28} /></span><h1>Your schedule is empty.</h1><p>Add a few priorities and fixed plans to build your day.</p>
             <button className="primary-button" onClick={() => setShowSetup(true)}>Plan my day <ArrowRight size={17} /></button>
           </section>
         )}
@@ -523,8 +604,8 @@ function App() {
             <button className="modal-close" aria-label="Close" onClick={() => setShowAddTask(false)}><X size={19} /></button>
             <span className="modal-icon"><Plus size={20} /></span>
             <h2 id="add-modal-title">One more thing?</h2>
-            <p>We’ll find a little space for it at the end of your plan.</p>
-            <form onSubmit={addTask}><label className="field-label" htmlFor="new-task">WHAT’S ON YOUR MIND?</label><input autoFocus id="new-task" className="text-input" maxLength={100} required value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="A small thing, a big thing…" />{addTaskError && <div className="form-error modal-error" role="alert">{addTaskError}</div>}<button className="primary-button modal-submit" type="submit">Add to my day <ArrowDown size={16} /></button></form>
+            <p>We will place it in the next available time slot.</p>
+            <form onSubmit={addTask}><label className="field-label" htmlFor="new-task">PRIORITY</label><input autoFocus id="new-task" className="text-input" maxLength={100} required value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="What needs to get done?" />{addTaskError && <div className="form-error modal-error" role="alert">{addTaskError}</div>}<button className="primary-button modal-submit" type="submit">Add to schedule <ArrowDown size={16} /></button></form>
           </section>
         </div>
       )}

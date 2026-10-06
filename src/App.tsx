@@ -611,7 +611,7 @@ function App() {
             <span>daywell<span className="brand-period">.</span></span>
           </a>
           <div className="story-copy">
-            <span className="story-kicker"><span /> YOUR DAY, WITH A LITTLE MORE SPACE</span>
+            <span className="story-kicker">YOUR DAY, WITH A LITTLE MORE SPACE</span>
             <h1>A calmer way<br />to meet your <em>day.</em></h1>
             <p>Make a schedule that fits your real life, not the other way around.</p>
           </div>
@@ -716,7 +716,7 @@ function App() {
         {showSetup ? (
           <section className="setup-wrap" aria-labelledby="setup-title">
             <div className="setup-heading">
-              <div className="eyebrow"><span className="eyebrow-line" /> PLAN YOUR DAY</div>
+              <div className="eyebrow">PLAN YOUR DAY</div>
               <h1 id="setup-title">Make a plan<br />that fits <em>today.</em></h1>
               <p>Tell us how you feel, what is already planned and what matters. We will shape a schedule around your day.</p>
             </div>
@@ -775,7 +775,7 @@ function App() {
           <section className="day-view" aria-labelledby="day-title">
             <div className="day-heading">
               <div>
-                <div className="eyebrow"><span className="eyebrow-line" /> YOUR SCHEDULE</div>
+                <div className="eyebrow">YOUR SCHEDULE</div>
                 <h1 id="day-title">Here is <em>your day.</em></h1>
                 <p className="day-date"><Sun size={16} /> {dayLabel(plan.date)}</p>
               </div>
